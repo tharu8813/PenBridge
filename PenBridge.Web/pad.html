@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PenBridge</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --accent: #0A84FF;
+    --glass-bg: rgba(28, 28, 30, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.12);
+  }
+  html, body {
+    margin: 0; height: 100%; background: #000; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  }
+  #screenPreview {
+    position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain;
+    background: #000; -webkit-user-drag: none; pointer-events: none;
+  }
+  #pad { -webkit-user-drag: none; -webkit-tap-highlight-color: transparent; position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+  }
+
+  #hud {
+    position: fixed; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 999px;
+    color: #f2f2f7; font-size: 13px; font-weight: 500; letter-spacing: -0.01em;
+    pointer-events: none; white-space: nowrap;
+  }
+  #hud .dot { width: 8px; height: 8px; border-radius: 50%; background: #8e8e93; transition: background-color .25s ease; flex: none; }
+  #hud.ok .dot { background: #30D158; box-shadow: 0 0 8px #30D15888; }
+  #hud.warn .dot { background: #FF9F0A; }
+  #hud.err .dot { background: #FF453A; }
+  #hud .detail { color: #a1a1a6; font-weight: 400; }
+
+  #hint {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    color: rgba(235,235,245,0.55); font-size: 15px; font-weight: 400; text-align: center; line-height: 1.6;
+    pointer-events: none; transition: opacity .3s ease;
+  }
+  #hint b { color: rgba(235,235,245,0.85); font-weight: 600; }
+
+  /* Apple-inspired web materials, implemented with native CSS. */
+  .toolbar { position:fixed; z-index:3; bottom:max(20px,env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:44px; padding:8px 10px 8px 20px; border-radius:24px; box-shadow:0 8px 32px #0004; }
+  .brand { color:#fff; font-weight:600; font-size:15px; letter-spacing:-.4px; white-space:nowrap; } .brand small {font-size:9px; letter-spacing:1.5px; color:#a1a1a6; margin-left:8px;}
+  .actions {display:flex; gap:4px;} button {font:inherit; cursor:pointer; touch-action:manipulation;}
+  .toolbar button { min-height:44px; padding:0 16px; color:#fff; border:0; background:#ffffff12; border-radius:17px; font-size:14px; }
+  #settingsBtn {background:#f5f5f7; color:#1d1d1f; font-weight:600;}
+  #hud {z-index:2; padding:10px 16px; background:#202024cc; opacity:0; visibility:hidden; transform:translate(-50%,-10px) scale(.96); transition:opacity .28s ease,transform .38s cubic-bezier(.2,.8,.2,1),visibility 0s linear .38s;} #hud.visible {opacity:1; visibility:visible; transform:translate(-50%,0) scale(1); transition-delay:0s;} #hint {z-index:2;}
+  dialog {box-sizing:border-box; width:min(480px,calc(100% - 32px)); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid #ffffffa0; border-radius:30px; padding:28px; background:#f2f2f7; color:#1d1d1f; box-shadow:0 32px 100px #0006; color-scheme:light;}
+  dialog::backdrop {background:#0006; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);}
+  dialog header {display:flex; justify-content:space-between; align-items:center;} .eyebrow {font-size:11px; color:#86868b; margin:0 0 5px; letter-spacing:1px;}
+  h1 {font-size:32px; letter-spacing:-1.2px; margin:0; font-weight:700;} .intro {font-size:14px; color:#6e6e73; margin:14px 0 26px;}
+  dialog button {border:0; border-radius:16px; min-height:44px; padding:0 16px; color:#007aff; background:#e7edf6; font-weight:600;}
+  h2 {font-size:12px; color:#6e6e73; font-weight:500; margin:24px 12px 8px;} .group {background:white; border-radius:18px; padding:0 16px;}
+  .row {display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:60px; font-size:15px; border-bottom:1px solid #eeeef0;} .row:last-child {border:0;}
+  .row small {display:block; color:#86868b; font-size:11px; margin-top:4px;} select {max-width:55%; border:0; background:transparent; color:#007aff; font:inherit; font-size:14px; min-height:44px;}
+  input[role=switch] {appearance:none; -webkit-appearance:none; width:48px; height:29px; flex-shrink:0; border-radius:99px; background:#e5e5ea; position:relative; transition:background .18s;}
+  input[role=switch]::after {content:''; position:absolute; width:25px; height:25px; top:2px; left:2px; background:#fff; border-radius:50%; box-shadow:0 2px 4px #0002; transition:transform .18s;}
+  input[role=switch]:checked {background:#34c759;} input[role=switch]:checked::after {transform:translateX(19px);}
+  .footnote {font-size:11px; line-height:1.6; color:#86868b; margin:10px 12px;} dialog footer {display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:24px; font-size:12px; color:#6e6e73;}
+  :focus-visible {outline:3px solid #007aff; outline-offset:3px;}
+  @media(max-width:520px) {dialog {padding:22px; border-radius:26px;} .toolbar {gap:20px;} #hud .detail {display:none;} }
+  @media(prefers-reduced-motion:reduce) {* {transition:none!important;}}
+  @media(prefers-reduced-transparency:reduce) {.glass {background:#252528; backdrop-filter:none;} dialog::backdrop {backdrop-filter:none;}}
+
+  #tabletSurface {position:fixed; inset:0; background-color:#141619; background-image:radial-gradient(#ffffff12 .8px,transparent .8px); background-size:24px 24px; pointer-events:none;}
+  .tablet-caption {position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; width:90%; color:#86868b;}
+  .tablet-mark {display:inline-grid; place-items:center; width:48px; height:48px; border:1px solid #ffffff20; border-radius:15px; font-size:25px; font-weight:600; color:#b4b4bb;}
+  .tablet-caption h2 {font-size:18px; font-weight:500; color:#b4b4bb; margin:18px 0 8px; letter-spacing:-.5px;} .tablet-caption p {font-size:12px; margin:0;}
+  .row:has(:disabled) {opacity:.4;} .toolbar button[aria-pressed=true] {background:#ff9f0a; color:#1d1d1f;}
+  @media(max-width:520px) {.toolbar {gap:12px; padding-left:12px; max-width:calc(100% - 32px);} .toolbar button {padding:0 10px; white-space:nowrap; font-size:12px;} .brand small {display:none;} .brand {font-size:13px;} }
+
+  #calibrationLayer {position:fixed; inset:0; z-index:10; background:#101216ed; touch-action:none; user-select:none;}
+  #calibrationTarget {position:absolute; width:42px; height:42px; transform:translate(-50%,-50%); border:2px solid #0a84ff; border-radius:50%; pointer-events:none; box-shadow:0 0 0 10px #0a84ff18;}
+  #calibrationTarget::after {content:'+'; position:absolute; inset:0; display:grid; place-items:center; color:white; font-size:28px;}
+  .calibration-help {position:absolute; top:45%; left:15%; right:15%; text-align:center; color:#eee; pointer-events:none; font-size:15px;}
+  .calibration-help button {pointer-events:auto; border:0; border-radius:20px; background:#ffffff20; color:#fff; padding:12px 24px;}
+  .pen-cursor {position:fixed; width:22px; height:22px; border:2px solid #0a84ff; border-radius:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:2; box-sizing:border-box;}
+  #predictionCursor {width:12px; height:12px; border-style:dashed; opacity:.55;}
+  #penDiagnostics {margin:18px 0; background:#fff; border-radius:18px; padding:16px;}
+  #penDiagnostics summary {font-size:14px; cursor:pointer; min-height:24px;}
+  #penDiagnosticsText {font:12px/1.7 ui-monospace,monospace; white-space:pre-wrap; overflow-wrap:anywhere; color:#53535b;}
+  #penLiveReadout {position:fixed; z-index:4; left:16px; top:70px; max-width:calc(100% - 64px); padding:9px 40px 9px 14px; border-radius:16px; color:#f5f5f7; font:12px/1.6 ui-monospace,monospace; white-space:pre-wrap; touch-action:none; cursor:grab; box-shadow:0 10px 30px #0005;}
+  #penLiveReadout.dragging {cursor:grabbing;}
+  #closeLiveStats {position:absolute; right:7px; top:7px; width:28px; height:28px; min-height:0; padding:0; border:0; border-radius:50%; color:#fff; background:#ffffff18; font-size:18px; line-height:1;}
+  #toolbarToggle {min-width:44px; padding:0!important; font-size:18px; transition:transform .25s ease;}
+  .toolbar.collapsed {gap:0; padding:8px;}
+  .toolbar.collapsed .brand,.toolbar.collapsed .actions {display:none;}
+  .toolbar.collapsed #toolbarToggle {transform:rotate(180deg);}
+</style>
+</head>
+<body>
+<div id="tabletSurface" hidden><div class="tablet-caption"><span class="tablet-mark">P</span><h2>나만의 드로잉 패드</h2><p>PC 화면을 보며 Apple Pencil로 작업하세요.</p></div></div>
+<video id="screenPreview" autoplay muted playsinline disableRemotePlayback aria-label="컴퓨터 실시간 화면"></video>
+<div id="hoverCursor" class="pen-cursor" hidden></div><div id="predictionCursor" class="pen-cursor" hidden></div>
+<aside id="penLiveReadout" class="glass" hidden><span id="penLiveText"></span><button id="closeLiveStats" type="button" aria-label="입력값 창 닫기">×</button></aside>
+<div id="hud" class="glass warn visible">
+  <span class="dot"></span>
+  <span id="statusText">연결 중…</span>
+  <span class="detail" id="detailText"></span>
+</div>
+<nav id="toolbar" class="toolbar glass" aria-label="작업 도구"><span class="brand">PenBridge <small>LIVE</small></span><div class="actions"><button id="pauseInput" aria-pressed="false">입력 잠금</button><button id="settingsBtn" aria-haspopup="dialog">설정</button></div><button id="toolbarToggle" type="button" aria-label="하단 도구 숨기기" aria-expanded="true">⌄</button></nav>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle">
+  <header><div><p class="eyebrow">나의 작업 공간</p><h1 id="settingsTitle">설정</h1></div><button id="closeSettings" class="done">완료</button></header>
+  <p class="intro">그리기에 편안한 환경으로 맞춰보세요.</p>
+  <form id="settingsForm">
+    <h2>펜 기능</h2><section class="group">
+      <label class="row" for="pressureSetting"><span>필압 반응</span><select id="pressureSetting"><option value="normal">기본</option><option value="soft">가볍게 눌러도 진하게</option><option value="firm">세게 눌러야 진하게</option><option value="constant">일정한 필압</option></select></label>
+      <label class="row" for="inputRateSetting"><span>위치 전송 빈도<small>낮추면 네트워크와 PC 사용량이 줄어듭니다.</small></span><select id="inputRateSetting"><option value="maximum">최대 · 원본 입력</option><option value="240">최대 240 Hz</option><option value="120">최대 120 Hz</option><option value="60">최대 60 Hz</option></select></label>
+      <label class="row" for="hoverSetting"><span>호버 커서</span><input id="hoverSetting" type="checkbox" role="switch"></label>
+      <label class="row" for="liveStatsSetting"><span>작업 중 입력값 표시</span><input id="liveStatsSetting" type="checkbox" role="switch"></label>
+      <label class="row" for="predictionSetting"><span>예측 위치 미리보기<small>실험 기능 · PC 입력에는 반영하지 않습니다.</small></span><input id="predictionSetting" type="checkbox" role="switch"></label>
+    </section><p class="footnote">전송 빈도는 브라우저가 수집한 실제 입력 빈도를 넘을 수 없습니다. 가장 부드러운 선은 ‘최대’를 사용하세요.</p>
+    <details id="penDiagnostics"><summary>펜 입력 진단</summary><pre id="penDiagnosticsText" aria-live="off">패드에서 펜을 움직이면 입력값을 확인할 수 있습니다.</pre><p class="footnote">항목이 존재해도 브라우저 기본값일 수 있습니다. 화면을 누르며 필압·기울기·회전을 바꿔 확인하세요. 펜 몸통 더블 탭·스퀴즈·햅틱은 이 웹 버전에서 지원하지 않습니다.</p></details>
+    <h2>대상 모니터</h2><section class="group"><label class="row" for="monitorSetting"><span>PC 화면</span><select id="monitorSetting" aria-describedby="monitorStatus"></select></label></section><p class="footnote" id="monitorStatus" role="status">연결된 PC의 모니터 목록을 불러옵니다.</p>
+    <h2>작업 모드</h2><section class="group"><label class="row" for="modeSetting"><span>화면 모드</span><select id="modeSetting"><option value="tablet">타블릿 화면</option><option value="stream">스트리밍 화면</option></select></label></section><p class="footnote" id="modeDescription">PC 화면을 실시간으로 보며 작업합니다.</p>
+    <h2>드로잉 영역</h2><section class="group"><label class="row" for="marginSetting"><span>가장자리 여백</span><select id="marginSetting"><option value="0">없음</option><option value="16">16px</option><option value="32">32px</option><option value="48">48px</option><option value="64">64px</option><option value="96">96px</option></select></label></section><p class="footnote">여백에서는 새 입력을 시작하지 않습니다. 그리는 중 영역 밖으로 이동하면 가장자리까지 이어집니다.</p><h2>화면</h2><section class="group">
+      <label class="row" for="latencySetting"><span>반응 속도 우선<small>재생 대기를 줄여 입력에 빠르게 반응합니다.</small></span><input id="latencySetting" type="checkbox" role="switch"></label>
+      <label class="row" for="mappingSetting"><span>화면 맞춤</span><select id="mappingSetting"><option value="preserveAspectRatio">비율 유지</option><option value="stretch">화면 채우기</option></select></label>
+      <label class="row" for="qualitySetting"><span>영상 품질</span><select id="qualitySetting"><option value="balanced">균형 · 1280px</option><option value="sharp">선명하게 · 1920px</option><option value="fast">빠르게 · 960px</option></select></label>
+      <label class="row" for="fpsSetting"><span>프레임 속도</span><select id="fpsSetting"><option value="30">30 fps</option><option value="60">60 fps</option><option value="15">15 fps</option></select></label>
+    </section><p class="footnote">속도와 화질은 PC 성능과 네트워크 환경에 따라 달라집니다.</p>
+    <h2>터치 보정</h2><section class="group"><div class="row"><span id="calibrationStatus">위치 보정</span><button type="button" id="calibrateBtn">보정 시작</button></div><div class="row"><span>기본 좌표로 되돌리기</span><button type="button" id="resetCalibration">초기화</button></div></section><p class="footnote">4개 기준점을 눌러 위치와 가로·세로 비율을 보정합니다. 화면 방향·모니터·매핑이 바뀌면 다시 보정하세요.</p><h2>Apple Pencil</h2><section class="group">
+      <label class="row" for="touchSetting"><span>손가락 입력 허용<small>꺼두면 손바닥의 터치를 무시합니다.</small></span><input id="touchSetting" type="checkbox" role="switch"></label>
+      <label class="row" for="trailStyleSetting"><span>흔적 형태</span><select id="trailStyleSetting"><option value="glow">빛 번짐</option><option value="line">연결 선</option><option value="ring">링</option><option value="dot">점</option></select></label><label class="row" for="trailColorSetting"><span>펜 흔적 색상</span><input id="trailColorSetting" type="color" aria-label="펜 흔적 색상"></label><label class="row" for="touchTrailColorSetting"><span>손가락 흔적 색상</span><input id="touchTrailColorSetting" type="color" aria-label="손가락 흔적 색상"></label><label class="row" for="trailSizeSetting"><span>크기 / 선 굵기</span><select id="trailSizeSetting"><option value="3">작게 · 3px</option><option value="6">보통 · 6px</option><option value="12">크게 · 12px</option><option value="20">아주 크게 · 20px</option></select></label><label class="row" for="trailLifeSetting"><span>사라지는 시간</span><select id="trailLifeSetting"><option value="150">짧게 · 0.15초</option><option value="380">기본 · 0.38초</option><option value="800">길게 · 0.8초</option><option value="1500">아주 길게 · 1.5초</option></select></label><label class="row" for="trailSetting"><span>입력 흔적 표시</span><input id="trailSetting" type="checkbox" role="switch"></label>
+    </section><p class="footnote">화면·입력 설정은 이 iPad에 저장됩니다. 대상 모니터 선택은 연결된 PC에 적용됩니다.</p>
+  </form>
+  <footer><span id="videoStatus" role="status">스트리밍 연결 중…</span><button id="retryVideo">다시 연결</button></footer>
+</dialog>
+<div id="hint"><b>Apple Pencil</b>로 이 화면에 필기하세요<br>Pressure · Tilt 지원</div>
+<canvas id="pad"></canvas><div id="calibrationLayer" hidden><div id="calibrationTarget"></div><div class="calibration-help"><p id="calibrationHelp"></p><button id="cancelCalibration">취소</button></div></div>
+<script>
+const CONFIG = window.__PENBRIDGE_CONFIG__ || { mappingMode:'preserveAspectRatio', targetAspect:16/9, allowNonPen:false, mappingKey:'loading', monitors:[] };
+const PROTOCOL_VERSION = 1; // must match PenSample.ProtocolVersion on the server
+
+const pad = document.getElementById('pad');
+const ctx2d = pad.getContext('2d');
+const hud = document.getElementById('hud');
+const statusText = document.getElementById('statusText');
+const detailText = document.getElementById('detailText');
+const hint = document.getElementById('hint');
+const screenPreview = document.getElementById('screenPreview');
+const hoverCursor = document.getElementById('hoverCursor');
+const predictionCursor = document.getElementById('predictionCursor');
+let predictedUntil = 0;
+const observations = {count:0, start:performance.now(), hz:0, last:null, speed:0, heading:0,
+  pressureMin:Infinity, pressureMax:-Infinity, twistMin:Infinity, twistMax:-Infinity,
+  hover:false, coalesced:false, predicted:false, raw:false, current:null};
+
+function pressureResponse(value, contact, curve) {
+  if (!contact) return 0;
+  if (curve === 'constant') return 0.5;
+  const p=Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
+  return Math.pow(p,curve==='soft'?.65:curve==='firm'?1.6:1);
+}
+function readTilt(e) {
+  if (Number.isFinite(e.tiltX) && Number.isFinite(e.tiltY))
+    return {x:Math.round(Math.max(-90,Math.min(90,e.tiltX))),y:Math.round(Math.max(-90,Math.min(90,e.tiltY)))};
+  if (Number.isFinite(e.altitudeAngle) && Number.isFinite(e.azimuthAngle)) {
+    const altitude=Math.max(0,Math.min(Math.PI/2,e.altitudeAngle));
+    const component=(v)=>Math.abs(v)<1e-10?0:Math.round(Math.atan2(v,Math.tan(altitude))*180/Math.PI);
+    return {x:component(Math.cos(e.azimuthAngle)),y:component(Math.sin(e.azimuthAngle))};
+  }
+  return {x:0,y:0};
+}
+function observeInput(e,contact) {
+  const now=performance.now(),stamp=Number.isFinite(e.timeStamp)?e.timeStamp:now;
+  const previous=observations.last;
+  if(previous && stamp>previous.t && stamp-previous.t<200) {
+    const dx=e.clientX-previous.x,dy=e.clientY-previous.y;
+    observations.speed=Math.hypot(dx,dy)*1000/(stamp-previous.t);
+    observations.heading=(Math.atan2(dy,dx)*180/Math.PI+360)%360;
+  } else observations.speed=0;
+  observations.last={x:e.clientX,y:e.clientY,t:stamp};
+  observations.count++;
+  if(e.pointerType==='pen') {
+    observations.hover ||= !contact;
+    if(contact && Number.isFinite(e.pressure)) {
+      observations.pressureMin=Math.min(observations.pressureMin,e.pressure);
+      observations.pressureMax=Math.max(observations.pressureMax,e.pressure);
+    }
+    if(Number.isFinite(e.twist)) {
+      observations.twistMin=Math.min(observations.twistMin,e.twist);
+      observations.twistMax=Math.max(observations.twistMax,e.twist);
+    }
+  }
+  const tilt=readTilt(e),tx=Math.tan(tilt.x*Math.PI/180),ty=Math.tan(tilt.y*Math.PI/180);
+  observations.current={type:e.pointerType||'알 수 없음',contact,pressure:e.pressure,tilt,
+    twist:e.twist,tangential:e.tangentialPressure,width:e.width,height:e.height,buttons:e.buttons,
+    altitude:Number.isFinite(e.altitudeAngle)?e.altitudeAngle:Math.atan2(1,Math.hypot(tx,ty)),
+    azimuth:Number.isFinite(e.azimuthAngle)?e.azimuthAngle:(Math.atan2(ty,tx)+2*Math.PI)%(2*Math.PI)};
+}
+function updatePreview(e,contact) {
+  observations.raw ||= e.type === 'pointerrawupdate';
+  hoverCursor.hidden=!(preferences.hover && !contact && e.pointerType==='pen');
+  hoverCursor.style.left=e.clientX+'px';hoverCursor.style.top=e.clientY+'px';hoverCursor.style.borderColor=preferences.trailColor;
+  predictionCursor.hidden=true;predictedUntil=0;
+  if(preferences.prediction && contact) {
+    let points=[];try { points=e.getPredictedEvents?.()||[]; }catch(_){}
+    const point=points.find(p=>!Number.isFinite(p.timeStamp)||!Number.isFinite(e.timeStamp)||p.timeStamp-e.timeStamp<=30);
+    if(point && insideDrawingArea(point)) {
+      observations.predicted=true;predictionCursor.hidden=false;
+      predictionCursor.style.left=point.clientX+'px';predictionCursor.style.top=point.clientY+'px';
+      predictionCursor.style.borderColor=preferences.trailColor;predictedUntil=performance.now()+50;
+    }
+  }
+}
+setInterval(()=>{
+  const now=performance.now(),elapsed=now-observations.start;
+  if(elapsed>=1000) {observations.hz=observations.count*1000/elapsed;observations.count=0;observations.start=now;}
+  const live=document.getElementById('penLiveReadout');live.hidden=!preferences.liveStats;
+  if(!observations.current)return;
+  const c=observations.current,format=(v,digits=1)=>Number.isFinite(v)?v.toFixed(digits):'미제공';
+  if(preferences.liveStats)document.getElementById('penLiveText').textContent=`${c.type==='touch'?'손가락':'펜'} · ${Math.round(observations.hz)} samples/s\n필압 ${format(c.pressure,3)} → ${format(pressureResponse(c.pressure,c.contact,preferences.pressureCurve),3)}\n기울기 ${c.tilt.x}°/${c.tilt.y}° · 회전 ${format(c.twist)}°\n속도 ${format(observations.speed)} px/s`;
+  if(!document.getElementById('penDiagnostics').open)return;
+  document.getElementById('penDiagnosticsText').textContent=[
+    `입력: ${c.type} · ${c.contact?'접촉':'호버/이동'}`,
+    `수집 빈도: ${Math.round(observations.hz)} samples/s (이 페이지에서 관측)`,
+    `필압: ${format(c.pressure,3)} · ${observations.pressureMax-observations.pressureMin>.01?'변화 관측':'센서 지원 미확인'}`,
+    `전달 필압: ${format(pressureResponse(c.pressure,c.contact,preferences.pressureCurve),3)}`,
+    `기울기: ${c.tilt.x}° / ${c.tilt.y}°`,
+    `고도/방위각: ${format(c.altitude*180/Math.PI)}° / ${format(c.azimuth*180/Math.PI)}°`,
+    `축 회전: ${format(c.twist)}° · ${observations.twistMax>observations.twistMin?'변화 관측':'센서 지원 미확인'}`,
+    `이동 속도: ${format(observations.speed)} px/s · 방향 ${format(observations.heading)}° (계산값)`,
+    `접촉 크기: ${format(c.width)} × ${format(c.height)} px (기본값일 수 있음)`,
+    `접선 압력: ${format(c.tangential,3)} · 버튼 비트: ${c.buttons??'미제공'}`,
+    `호버: ${observations.hover?'관측됨':'미관측'}`,
+    `원시 입력: ${observations.raw?'수신됨':'미관측'} · 중간 좌표: ${observations.coalesced?'수신됨':'미관측'}`,
+    `예측 좌표: ${observations.predicted?'수신됨':'미관측/꺼짐'} (화면 표시만)`,
+    `보안 연결: ${window.isSecureContext?'예':'아니오 · 일부 입력 API가 제한될 수 있음'}`
+  ].join('\n');
+},250);
+
+const preferences = { mapping: CONFIG.mappingMode, quality: 'balanced', fps: 30, touch: CONFIG.allowNonPen, trail: true, lowLatency: true, mode: 'stream', margin: 0, trailStyle: 'glow', trailColor: '#0a84ff', touchTrailColor: '#ff9f0a', trailSize: 12, trailLife: 380, pressureCurve: 'normal', inputRate: 'maximum', hover: true, prediction: false, liveStats: false, toolbarCollapsed: false, liveX: 16, liveY: 70 };
+try { Object.assign(preferences, JSON.parse(localStorage.getItem('penbridge.preferences') || '{}')); } catch (_) {}
+normalizeDrawingPreferences();
+if (!['tablet','stream'].includes(preferences.mode)) preferences.mode = 'stream';
+let calibrating = false;
+let calibrationPoints = [];
+const calibrationTargets = [[0.15,0.15],[0.85,0.15],[0.85,0.85],[0.15,0.85]];
+let calibration = null;
+try { calibration = JSON.parse(localStorage.getItem('penbridge.calibration') || 'null'); } catch (_) {}
+let inputPaused = false;
+let trailDirty = true;
+const tabletSurface = document.getElementById('tabletSurface');
+const settingsDialog = document.getElementById('settingsDialog');
+const videoStatus = document.getElementById('videoStatus');
+
+let socket = null;
+let connecting = false;
+let reconnectDelayMs = 500;
+let reconnectTimer = null;
+let activeRect = { x: 0, y: 0, w: 0, h: 0 };
+let currentlyDown = false;
+let activePointerId = null;
+const activePointers = new Map(); // browser pointerId -> { lastSample, stroke, pointerType }
+let lastSample = null;
+let pendingMove = null;
+let strokeId = 0;
+let trail = []; // { x, y, t } in canvas backing-store pixels, for the fading touch effect
+
+let hudHideTimer=null;
+function setHud(text, cls, detail) {
+  clearTimeout(hudHideTimer);
+  hud.className = 'glass ' + cls + ' visible';
+  statusText.textContent = text;
+  detailText.textContent = detail || '';
+  if(cls==='ok' || cls==='err') hudHideTimer=setTimeout(()=>hud.classList.remove('visible'),cls==='ok'?1800:2600);
+}
+
+function dpr() { return window.devicePixelRatio || 1; }
+
+function resize() {
+  if (calibrating) cancelCalibration();
+  releaseIfDown();
+  const d = dpr();
+  pad.width = Math.round(window.innerWidth * d);
+  pad.height = Math.round(window.innerHeight * d);
+  pad.style.width = window.innerWidth + 'px';
+  pad.style.height = window.innerHeight + 'px';
+  computeActiveRect();
+}
+
+function normalizeDrawingPreferences() {
+  if (!['normal','soft','firm','constant'].includes(preferences.pressureCurve)) preferences.pressureCurve='normal';
+  if (!['maximum','240','120','60'].includes(String(preferences.inputRate))) preferences.inputRate='maximum';
+  for (const [key,min,max,fallback] of [['margin',0,96,0],['trailSize',3,20,12],['trailLife',150,1500,380]]) {
+    const n=Number(preferences[key]); preferences[key]=Number.isFinite(n)?Math.min(max,Math.max(min,n)):fallback;
+  }
+  if (!['glow','line','ring','dot'].includes(preferences.trailStyle)) preferences.trailStyle='glow';
+  if (!/^#[0-9a-f]{6}$/i.test(preferences.trailColor)) preferences.trailColor='#0a84ff';
+  if (!/^#[0-9a-f]{6}$/i.test(preferences.touchTrailColor)) preferences.touchTrailColor='#ff9f0a';
+  preferences.liveX=Number.isFinite(Number(preferences.liveX))?Number(preferences.liveX):16;
+  preferences.liveY=Number.isFinite(Number(preferences.liveY))?Number(preferences.liveY):70;
+}
+function computeActiveRect() {
+  trailDirty = true;
+  const d=dpr(), margin=Math.min(Number(preferences.margin)||0, Math.max(0,Math.min(pad.width,pad.height)/d/2-40))*d;
+  const cw=pad.width-2*margin,ch=pad.height-2*margin;
+  for(const surface of [screenPreview,tabletSurface]) {
+    surface.style.left=margin/d+'px';surface.style.top=margin/d+'px';
+    surface.style.width=cw/d+'px';surface.style.height=ch/d+'px';
+  }
+  screenPreview.style.objectFit = preferences.mapping === 'stretch' ? 'fill' : 'contain';
+  let w=cw,h=ch;
+  if(preferences.mapping === 'preserveAspectRatio' && CONFIG.targetAspect>0) {
+    if(cw/ch>CONFIG.targetAspect) w=ch*CONFIG.targetAspect; else h=cw/CONFIG.targetAspect;
+  }
+  activeRect={x:(pad.width-w)/2,y:(pad.height-h)/2,w,h};
+}
+function insideDrawingArea(e) {
+  const x=e.clientX*dpr(),y=e.clientY*dpr();
+  return x>=activeRect.x && x<=activeRect.x+activeRect.w && y>=activeRect.y && y<=activeRect.y+activeRect.h;
+}
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', resize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+
+// Only configuration is polled; video uses a single continuous encoded stream.
+setInterval(() => { if (!document.hidden) refreshConfig(); }, 2000);
+
+// --- Config: re-fetched before every (re)connect so a monitor/mapping-mode change in the
+// Windows UI takes effect without a full Safari reload ---
+let refreshingConfig = false;
+let selectingMonitor = false;
+async function refreshConfig() {
+  if (refreshingConfig || selectingMonitor) return;
+  refreshingConfig = true;
+  try {
+    const res = await fetch('/config', { cache: 'no-store' });
+    if (res.ok) { const config = await res.json(); if (!selectingMonitor) applyConfig(config); }
+  } catch (_) { /* offline — keep using the last known config */ }
+  finally { refreshingConfig = false; }
+  computeActiveRect();
+}
+
+function applyConfig(config) {
+  if (JSON.stringify(CONFIG) !== JSON.stringify(config)) {
+    if (calibrating) cancelCalibration();
+    releaseIfDown();
+    pendingMove = null;
+    const changedMonitor = CONFIG.targetAspect !== config.targetAspect || CONFIG.mappingKey !== config.mappingKey;
+    Object.assign(CONFIG, config);
+    renderMonitorOptions();
+    computeActiveRect();
+    if (changedMonitor) startVideo();
+  }
+}
+
+function connect() {
+  if (connecting) return;
+  connecting = true;
+  refreshConfig().finally(() => {
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const url = `${scheme}://${location.host}/ws`;
+    setHud('연결 중…', 'warn');
+
+    socket = new WebSocket(url);
+    socket.onopen = () => {
+      connecting = false;
+      reconnectDelayMs = 500;
+      setHud('연결됨', 'ok');
+      hint.style.opacity = '0';
+    };
+    socket.onmessage = e => {
+      try { applyConfig(JSON.parse(e.data)); } catch (_) {}
+    };
+    socket.onclose = e => {
+      releaseIfDown();
+      pendingMove = null;
+      connecting = false;
+      setHud('연결 끊김', 'err', `${Math.round(reconnectDelayMs / 100) / 10}s 후 재시도`);
+      hint.style.opacity = '1';
+      scheduleReconnect();
+    };
+    socket.onerror = () => { try { socket.close(); } catch (_) {} };
+  });
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return; // never stack multiple pending reconnects
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, 8000);
+    connect();
+  }, reconnectDelayMs);
+}
+
+function send(sample) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(Object.assign({ v: PROTOCOL_VERSION, mappingKey: CONFIG.mappingKey }, sample)));
+  }
+}
+
+function frame() {
+  if (trailDirty || trail.length) { drawTrail(); trailDirty = false; }
+  if (predictedUntil && performance.now() > predictedUntil) { predictionCursor.hidden=true; predictedUntil=0; }
+  if (pendingMove) { send(pendingMove); pendingMove = null; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// --- Fading touch-point trail, drawn on top of the live screen preview ---
+function addTrailPoint(clientX, clientY, pointerType='pen', pointStroke=strokeId) {
+  if (!preferences.trail) return;
+  const d = dpr();
+  trail.push({ x: clientX * d, y: clientY * d, t: performance.now(), stroke: pointStroke, pointerType });
+  if (trail.length > 600) trail.shift();
+}
+function drawTrail() {
+  ctx2d.clearRect(0,0,pad.width,pad.height);
+  ctx2d.strokeStyle='rgba(255,255,255,0.18)';ctx2d.lineWidth=1*dpr();
+  ctx2d.strokeRect(activeRect.x,activeRect.y,activeRect.w,activeRect.h);
+  const now=performance.now(),lifeMs=Number(preferences.trailLife),size=Number(preferences.trailSize)*dpr();
+  trail=trail.filter(p=>now-p.t<lifeMs);
+  ctx2d.save();ctx2d.beginPath();ctx2d.rect(activeRect.x,activeRect.y,activeRect.w,activeRect.h);ctx2d.clip();
+  ctx2d.lineCap='round';ctx2d.lineJoin='round';
+  for(let i=0;i<trail.length;i++) {
+    const p=trail[i],fade=1-(now-p.t)/lifeMs;
+    const color=p.pointerType==='touch'?preferences.touchTrailColor:preferences.trailColor;
+    ctx2d.fillStyle=color;ctx2d.strokeStyle=color;
+    ctx2d.globalAlpha=fade*(preferences.trailStyle==='glow'?.32:.85);
+    ctx2d.lineWidth=preferences.trailStyle==='ring'?2*dpr():size;
+    ctx2d.beginPath();
+    if(preferences.trailStyle==='line' && i>0 && trail[i-1].stroke===p.stroke) {
+      ctx2d.moveTo(trail[i-1].x,trail[i-1].y);ctx2d.lineTo(p.x,p.y);ctx2d.stroke();
+    } else {
+      ctx2d.arc(p.x,p.y,preferences.trailStyle==='glow'?size*(.3+.7*fade):size/2,0,Math.PI*2);
+      if(preferences.trailStyle==='ring')ctx2d.stroke();else ctx2d.fill();
+    }
+  }
+  ctx2d.restore();
+}
+
+function toSample(e, phase, inContact, pointerId=e.pointerId, pointerType=e.pointerType) {
+  const nx = (e.clientX * dpr() - activeRect.x) / activeRect.w;
+  const ny = (e.clientY * dpr() - activeRect.y) / activeRect.h;
+  const corrected = correctPosition(nx, ny);
+  const tilt = readTilt(e);
+  return {
+    phase,
+    inContact,
+    x: Math.min(Math.max(corrected.x, 0), 1),
+    y: Math.min(Math.max(corrected.y, 0), 1),
+    pressure: pressureResponse(e.pressure, inContact, preferences.pressureCurve),
+    tiltX: tilt.x,
+    tiltY: tilt.y,
+    rotation: Number.isFinite(e.twist) ? ((Math.round(e.twist)%360)+360)%360 : null,
+    eraser: !!(e.buttons & 32),
+    barrel: !!(e.buttons & 2),
+    pointerId: Number.isInteger(pointerId) && pointerId >= 0 ? pointerId : 1,
+    pointerType: pointerType === 'touch' ? 'touch' : 'pen',
+  };
+}
+
+function isAcceptedPointer(e) {
+  return !selectingMonitor && !calibrating && !inputPaused && !settingsDialog.open && (e.pointerType === 'pen' || preferences.touch);
+}
+
+function onDown(e) {
+  if (!isAcceptedPointer(e)) return;
+  e.preventDefault();
+  if (activePointers.has(e.pointerId) || !insideDrawingArea(e)) return;
+  strokeId++;
+  pendingMove = null;
+  const pointer={lastSample:null,stroke:strokeId,pointerType:e.pointerType,lastSentAt:performance.now(),pendingSample:null,sendTimer:null};
+  activePointers.set(e.pointerId,pointer);
+  activePointerId = activePointers.keys().next().value;
+  currentlyDown = activePointers.size>0;
+  observations.last=null;
+  hoverCursor.hidden=true; predictionCursor.hidden=true;
+  observeInput(e,true);
+  lastSample = pointer.lastSample = toSample(e, 'down', true);
+  try { pad.setPointerCapture(e.pointerId); } catch (_) { /* window pointerup still releases */ }
+  addTrailPoint(e.clientX, e.clientY, e.pointerType, pointer.stroke);
+  detailText.textContent = `pressure ${e.pressure.toFixed(2)}`;
+  send(lastSample);
+}
+
+function onMove(e) {
+  if (!isAcceptedPointer(e)) return;
+  e.preventDefault();
+  const pointer=activePointers.get(e.pointerId);
+  const inContact=!!pointer;
+  if (!inContact && activePointers.size && e.pointerType==='touch') return;
+  if (!inContact && (e.buttons !== 0 || !insideDrawingArea(e))) return;
+  updatePreview(e,inContact);
+  if (inContact) {
+    detailText.textContent = `pressure ${e.pressure.toFixed(2)} · tilt ${e.tiltX || 0}/${e.tiltY || 0}`;
+  }
+  if (inContact) {
+    // Preserve all real samples; never throttle contact to the animation frame rate.
+    let points = [];
+    try { points = e.getCoalescedEvents?.() || []; } catch (_) {}
+    observations.coalesced ||= points.length > 1;
+    if (!points.length) points = [e];
+    pendingMove = null;
+    for (const point of points) {
+      observeInput(point,true);
+      addTrailPoint(point.clientX,point.clientY,e.pointerType,pointer.stroke);
+      lastSample = pointer.lastSample = toSample(point, 'move', true, e.pointerId, e.pointerType);
+      sendContact(pointer,lastSample);
+    }
+  } else {
+    observeInput(e,false);
+    lastSample = toSample(e, 'move', false);
+    pendingMove = lastSample; // only hover may be throttled
+  }
+}
+
+function onUp(e) {
+  if (!activePointers.has(e.pointerId)) return;
+  e.preventDefault();
+  releasePointer(e.pointerId,e);
+}
+
+// Best-effort client-side release in addition to the server's disconnect-triggered forced
+// release — covers the tab losing pointer capture without a clean pointerup ever firing.
+function releaseIfDown() {
+  hoverCursor.hidden=true; predictionCursor.hidden=true; predictedUntil=0;
+  pendingMove = null;
+  for (const pointerId of [...activePointers.keys()]) releasePointer(pointerId);
+}
+function releasePointer(pointerId,e=null) {
+  const pointer=activePointers.get(pointerId);if(!pointer)return;
+  const sample=e?toSample(e,'up',false):pointer.lastSample;
+  flushContact(pointer);
+  if(sample)send({...sample,phase:'up',inContact:false,pressure:0});
+  activePointers.delete(pointerId);
+  currentlyDown=activePointers.size>0;
+  activePointerId=currentlyDown?activePointers.keys().next().value:null;
+  if(!currentlyDown){predictionCursor.hidden=true;predictedUntil=0;}
+  detailText.textContent = '';
+  try { if (pad.hasPointerCapture(pointerId)) pad.releasePointerCapture(pointerId); } catch (_) {}
+}
+
+function inputIntervalMs(){return preferences.inputRate==='maximum'?0:1000/Number(preferences.inputRate);}
+function sendContact(pointer,sample){
+  const interval=inputIntervalMs(),now=performance.now();
+  if(!interval || now-pointer.lastSentAt>=interval){clearTimeout(pointer.sendTimer);pointer.sendTimer=null;pointer.pendingSample=null;pointer.lastSentAt=now;send(sample);return;}
+  pointer.pendingSample=sample;
+  if(pointer.sendTimer===null)pointer.sendTimer=setTimeout(()=>{pointer.sendTimer=null;flushContact(pointer);},Math.max(0,interval-(now-pointer.lastSentAt)));
+}
+function flushContact(pointer){
+  clearTimeout(pointer.sendTimer);pointer.sendTimer=null;
+  if(pointer.pendingSample){const sample=pointer.pendingSample;pointer.pendingSample=null;pointer.lastSentAt=performance.now();send(sample);}
+}
+
+pad.addEventListener('pointerdown', onDown, { passive: false });
+const rawInputSelected = !!window.isSecureContext && 'onpointerrawupdate' in window;
+pad.addEventListener(rawInputSelected ? 'pointerrawupdate' : 'pointermove', onMove, { passive: false });
+pad.addEventListener('pointerleave', () => { hoverCursor.hidden=true; predictionCursor.hidden=true; });
+window.addEventListener('pointerup', onUp, { passive: false });
+for (const type of ['pointercancel', 'lostpointercapture']) {
+  pad.addEventListener(type, e => releasePointer(e.pointerId));
+}
+for (const type of ['touchstart', 'touchmove', 'contextmenu', 'dragstart', 'selectstart', 'dblclick']) {
+  pad.addEventListener(type, e => e.preventDefault(), { passive: false });
+}
+resize();
+connect();
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (calibrating) cancelCalibration(); releaseIfDown(); stopVideo(); } else startVideo(); });
+window.addEventListener('pagehide', () => { releaseIfDown(); stopVideo(); });
+window.addEventListener('blur', releaseIfDown);
+
+const controls = {liveStats: document.getElementById('liveStatsSetting'), pressureCurve: document.getElementById('pressureSetting'), inputRate: document.getElementById('inputRateSetting'), hover: document.getElementById('hoverSetting'), prediction: document.getElementById('predictionSetting'), margin: document.getElementById('marginSetting'), trailStyle: document.getElementById('trailStyleSetting'), trailColor: document.getElementById('trailColorSetting'), touchTrailColor: document.getElementById('touchTrailColorSetting'), trailSize: document.getElementById('trailSizeSetting'), trailLife: document.getElementById('trailLifeSetting'), mode: document.getElementById('modeSetting'), lowLatency: document.getElementById('latencySetting'), mapping: document.getElementById('mappingSetting'), quality: document.getElementById('qualitySetting'), fps: document.getElementById('fpsSetting'), touch: document.getElementById('touchSetting'), trail: document.getElementById('trailSetting')};
+for (const [key, control] of Object.entries(controls)) {
+  if (control.type === 'checkbox') control.checked = preferences[key]; else control.value = preferences[key];
+}
+function savePreferences(){try{localStorage.setItem('penbridge.preferences',JSON.stringify(preferences));}catch(_) {}}
+const toolbar=document.getElementById('toolbar'),toolbarToggle=document.getElementById('toolbarToggle');
+function syncToolbar(){toolbar.className='toolbar glass'+(preferences.toolbarCollapsed?' collapsed':'');toolbarToggle.setAttribute('aria-expanded',String(!preferences.toolbarCollapsed));toolbarToggle.setAttribute('aria-label',preferences.toolbarCollapsed?'하단 도구 표시':'하단 도구 숨기기');}
+toolbarToggle.addEventListener('click',()=>{preferences.toolbarCollapsed=!preferences.toolbarCollapsed;syncToolbar();savePreferences();});
+syncToolbar();
+const liveReadout=document.getElementById('penLiveReadout');
+function placeLiveReadout(){preferences.liveX=Math.max(8,Math.min(window.innerWidth-80,Number(preferences.liveX)||16));preferences.liveY=Math.max(8,Math.min(window.innerHeight-60,Number(preferences.liveY)||70));liveReadout.style.left=preferences.liveX+'px';liveReadout.style.top=preferences.liveY+'px';}
+placeLiveReadout();
+window.addEventListener('resize',placeLiveReadout);
+document.getElementById('closeLiveStats').addEventListener('click',e=>{e.stopPropagation();preferences.liveStats=false;controls.liveStats.checked=false;liveReadout.hidden=true;savePreferences();});
+let liveDrag=null;
+liveReadout.addEventListener('pointerdown',e=>{if(e.target.id==='closeLiveStats')return;liveDrag={id:e.pointerId,dx:e.clientX-liveReadout.offsetLeft,dy:e.clientY-liveReadout.offsetTop};liveReadout.classList.add('dragging');try{liveReadout.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();});
+liveReadout.addEventListener('pointermove',e=>{if(!liveDrag||liveDrag.id!==e.pointerId)return;preferences.liveX=e.clientX-liveDrag.dx;preferences.liveY=e.clientY-liveDrag.dy;placeLiveReadout();e.preventDefault();});
+function endLiveDrag(e){if(!liveDrag||liveDrag.id!==e.pointerId)return;liveDrag=null;liveReadout.classList.remove('dragging');savePreferences();}
+liveReadout.addEventListener('pointerup',endLiveDrag);liveReadout.addEventListener('pointercancel',endLiveDrag);
+document.getElementById('settingsBtn').addEventListener('click', () => { releaseIfDown(); document.getElementById('calibrationStatus').textContent = !calibration ? '위치 보정' : calibration.key === calibrationKey() ? '보정 적용 중' : '화면 변경 · 재보정 필요'; settingsDialog.showModal(); });
+document.getElementById('closeSettings').addEventListener('click', () => settingsDialog.close());
+document.getElementById('settingsForm').addEventListener('submit', e => e.preventDefault());
+document.getElementById('settingsForm').addEventListener('change', () => {
+  releaseIfDown();
+  const oldStream = preferences.mode + preferences.quality + preferences.fps;
+  for (const [key, control] of Object.entries(controls)) preferences[key] = control.type === 'checkbox' ? control.checked : control.value;
+  normalizeDrawingPreferences();
+  savePreferences();
+  trail = []; computeActiveRect();
+  syncMode();
+  if (oldStream !== preferences.mode + preferences.quality + preferences.fps) startVideo();
+});
+let videoController = null;
+let videoUrl = null;
+let retryTimer = null;
+function stopVideo() {
+  clearTimeout(retryTimer);
+  videoController?.abort(); videoController = null;
+  screenPreview.playbackRate = 1;
+  screenPreview.pause(); screenPreview.removeAttribute('src'); screenPreview.load();
+  if (videoUrl) URL.revokeObjectURL(videoUrl);
+  videoUrl = null;
+}
+// This is decoded buffer headroom, NOT capture-to-display or network latency.
+function playbackPolicy(headroom, fps, lowLatency) {
+  const target = lowLatency ? Math.max(0.05, 2 / Math.max(15, Number(fps) || 30)) : 0.25;
+  const seek = headroom > (lowLatency ? Math.max(0.18, target * 2.5) : 0.8);
+  const rate = lowLatency && headroom > target + 0.04 ? 1.08 : 1;
+  return { target, seek, rate };
+}
+async function startVideo() {
+  stopVideo();
+  syncMode();
+  if (preferences.mode === 'tablet' || document.hidden || window.__PENBRIDGE_DISABLE_VIDEO__) return;
+  const controller = new AbortController(); videoController = controller;
+  const signal = controller.signal;
+  const mime = 'video/mp4; codecs="avc1.42C02A"';
+  const Media = window.MediaSource || window.ManagedMediaSource;
+  if (!Media || !Media.isTypeSupported(mime)) { videoStatus.textContent = '이 Safari 버전은 영상 스트리밍을 지원하지 않습니다.'; return; }
+  videoStatus.textContent = '영상 연결 중…';
+  try {
+    const media = new Media();
+    videoUrl = URL.createObjectURL(media);
+    const opened = new Promise((resolve, reject) => {
+      media.addEventListener('sourceopen', resolve, {once:true});
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {once:true});
+    });
+    screenPreview.src = videoUrl;
+    await opened;
+    const buffer = media.addSourceBuffer(mime);
+    function update(action) {
+      return new Promise((resolve,reject) => {
+        const cleanup = () => { buffer.removeEventListener('updateend',done); buffer.removeEventListener('error',failed); signal.removeEventListener('abort',failed); };
+        const done = () => { cleanup(); resolve(); };
+        const failed = () => { cleanup(); reject(new Error('영상 버퍼 연결이 끊어졌습니다.')); };
+        buffer.addEventListener('updateend',done,{once:true}); buffer.addEventListener('error',failed,{once:true}); signal.addEventListener('abort',failed,{once:true});
+        try { if(signal.aborted) failed(); else action(); } catch(error) { cleanup(); reject(error); }
+      });
+    }
+    const quality = {balanced:[1280,23], sharp:[1920,20], fast:[960,28]}[preferences.quality] || [1280,23];
+    const response = await fetch('/stream.mp4?fps='+preferences.fps+'&width='+quality[0]+'&crf='+quality[1], {signal,cache:'no-store'});
+    if (!response.ok) throw new Error('영상 연결 실패 ('+response.status+')');
+    const reader = response.body.getReader();
+    while (!signal.aborted) {
+      const {done,value} = await reader.read(); if(done) throw new Error('영상 연결 종료');
+      await update(() => buffer.appendBuffer(value));
+      if (buffer.buffered.length) {
+        const end = buffer.buffered.end(buffer.buffered.length-1);
+        const policy = playbackPolicy(end-screenPreview.currentTime, preferences.fps, preferences.lowLatency);
+        if (policy.seek) screenPreview.currentTime = Math.max(buffer.buffered.start(buffer.buffered.length-1),end-policy.target);
+        screenPreview.playbackRate = policy.seek ? 1 : policy.rate;
+        if (screenPreview.paused) screenPreview.play().catch(() => { videoStatus.textContent='다시 연결을 눌러 영상을 재생하세요.'; });
+        if(screenPreview.currentTime>10 && buffer.buffered.start(0)<screenPreview.currentTime-6) await update(() => buffer.remove(0,screenPreview.currentTime-5));
+        videoStatus.textContent = (preferences.lowLatency ? '빠른 반응' : '안정적 재생')+' · 재생 대기 '+Math.round(Math.max(0,end-screenPreview.currentTime)*1000)+'ms';
+      }
+    }
+  } catch(error) {
+    if(signal.aborted) return;
+    videoStatus.textContent = error.message+' · 재연결 중…';
+    retryTimer = setTimeout(startVideo,2000);
+  }
+}
+function syncMode() {
+  const tablet = preferences.mode === 'tablet';
+  hint.hidden = tablet;
+  screenPreview.hidden = tablet;
+  tabletSurface.hidden = !tablet;
+  document.getElementById('modeDescription').textContent = tablet
+    ? '영상 전송을 중단해 PC 부하와 네트워크 사용을 줄입니다. 펜 입력은 그대로 사용할 수 있습니다.'
+    : 'PC 화면을 실시간으로 보며 작업합니다.';
+  for (const key of ['quality','fps','lowLatency']) controls[key].disabled = tablet;
+  document.getElementById('retryVideo').disabled = tablet;
+  if (tablet) videoStatus.textContent = '타블릿 모드 · 영상 전송 꺼짐';
+}
+document.getElementById('pauseInput').addEventListener('click', () => {
+  releaseIfDown(); inputPaused = !inputPaused;
+  const button = document.getElementById('pauseInput');
+  button.setAttribute('aria-pressed', String(inputPaused));
+  button.textContent = inputPaused ? '입력 재개' : '입력 잠금';
+});
+function calibrationKey() {
+  return [CONFIG.mappingKey, preferences.mapping, preferences.margin, pad.width, pad.height].join('|');
+}
+function correctPosition(x,y) {
+  if (!calibration || calibration.key !== calibrationKey()) return {x,y};
+  const {sx,sy,ox,oy} = calibration;
+  if (![sx,sy,ox,oy].every(Number.isFinite)) return {x,y};
+  return {x:x*sx+ox,y:y*sy+oy};
+}
+function fitCalibration(points) {
+  if (points.length !== 4) return null;
+  const fit = axis => {
+    const input = points.map(p=>p[axis]), output=calibrationTargets.map(p=>p[axis]);
+    const mean=input.reduce((a,b)=>a+b,0)/4, target=0.5;
+    const variance=input.reduce((a,b)=>a+(b-mean)**2,0);
+    const scale=input.reduce((a,b,i)=>a+(b-mean)*(output[i]-target),0)/variance;
+    return [scale,target-scale*mean];
+  };
+  const [sx,ox]=fit(0),[sy,oy]=fit(1);
+  if (![sx,sy,ox,oy].every(Number.isFinite) || sx<0.8 || sx>1.2 || sy<0.8 || sy>1.2) return null;
+  if (points.some((p,i)=>Math.hypot(p[0]*sx+ox-calibrationTargets[i][0],p[1]*sy+oy-calibrationTargets[i][1])>0.035)) return null;
+  return {sx,sy,ox,oy};
+}
+function showCalibrationTarget() {
+  const [x,y]=calibrationTargets[calibrationPoints.length];
+  const target=document.getElementById('calibrationTarget');
+  target.style.left=(activeRect.x+x*activeRect.w)/dpr()+'px';
+  target.style.top=(activeRect.y+y*activeRect.h)/dpr()+'px';
+  document.getElementById('calibrationHelp').textContent=(calibrationPoints.length+1)+' / 4 · 평소 사용하는 펜 또는 손가락으로 십자 중심을 눌러주세요.';
+}
+function cancelCalibration() {
+  calibrating=false; calibrationPoints=[];
+  document.getElementById('calibrationLayer').hidden=true;
+}
+document.getElementById('calibrateBtn').addEventListener('click',()=>{
+  releaseIfDown(); settingsDialog.close(); calibrating=true; calibrationPoints=[];
+  document.getElementById('calibrationLayer').hidden=false; showCalibrationTarget();
+});
+document.getElementById('cancelCalibration').addEventListener('click',cancelCalibration);
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && calibrating) cancelCalibration();});
+document.getElementById('calibrationLayer').addEventListener('pointerup',e=>{
+  if (!calibrating || e.target === document.getElementById('cancelCalibration')) return;
+  e.preventDefault();
+  const point=[(e.clientX*dpr()-activeRect.x)/activeRect.w,(e.clientY*dpr()-activeRect.y)/activeRect.h];
+  const target=calibrationTargets[calibrationPoints.length];
+  if (Math.hypot(point[0]-target[0],point[1]-target[1])>0.12) return;
+  calibrationPoints.push(point);
+  if(calibrationPoints.length<4) {showCalibrationTarget();return;}
+  const result=fitCalibration(calibrationPoints);
+  if(result) {calibration={...result,key:calibrationKey()};try{localStorage.setItem('penbridge.calibration',JSON.stringify(calibration));}catch(_){} }
+  cancelCalibration();settingsDialog.showModal();
+  document.getElementById('calibrationStatus').textContent=result?'보정 저장 완료':'보정 실패 · 다시 시도하세요';
+});
+document.getElementById('resetCalibration').addEventListener('click',()=>{
+  calibration=null;try{localStorage.removeItem('penbridge.calibration');}catch(_){}
+  document.getElementById('calibrationStatus').textContent='기본 좌표로 초기화됨';
+});
+document.getElementById('retryVideo').addEventListener('click', startVideo);
+function renderMonitorOptions() {
+  if (!Array.isArray(CONFIG.monitors)) return;
+  const select = document.getElementById('monitorSetting');
+  select.replaceChildren();
+  for (const monitor of CONFIG.monitors) {
+    const option = document.createElement('option');
+    option.value = monitor.id; option.textContent = monitor.label;
+    select.appendChild(option);
+  }
+  select.value = CONFIG.selectedMonitor || '';
+  select.disabled = selectingMonitor || CONFIG.monitors.length === 0;
+  document.getElementById('monitorStatus').textContent = CONFIG.monitors.length ? '변경하면 영상과 펜 입력이 선택한 모니터로 이동합니다.' : '선택할 모니터가 없습니다.';
+}
+document.getElementById('monitorSetting').addEventListener('change', async e => {
+  if (selectingMonitor) return;
+  releaseIfDown(); selectingMonitor = true; e.target.disabled = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch('/monitor?id='+encodeURIComponent(e.target.value),
+      {method:'POST', signal:controller.signal});
+    if (!response.ok) throw new Error('모니터 변경 실패 ('+response.status+')');
+    applyConfig(await response.json());
+    document.getElementById('monitorStatus').textContent = '대상 모니터를 변경했습니다.';
+  } catch (error) {
+    e.target.value = CONFIG.selectedMonitor || '';
+    document.getElementById('monitorStatus').textContent = '변경하지 못했습니다. 연결을 확인하고 다시 시도하세요.';
+  } finally {
+    clearTimeout(timeout); selectingMonitor = false; e.target.disabled = false;
+  }
+});
+renderMonitorOptions();
+startVideo();
+</script>
+</body>
+</html>

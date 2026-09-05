@@ -1,0 +1,9 @@
+FFmpeg runtime for PenBridge
+
+Source project: https://ffmpeg.org/
+Windows build: https://www.gyan.dev/ffmpeg/builds/
+Downloaded archive: https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+Version: 9.0.1 essentials (see ffmpeg.exe -version for build flags).
+This executable is a separate process, unmodified, built with GPL components including libx264.
+See the accompanying LICENSE file and the build provider for corresponding sources/build instructions.
+Keep the tools directory beside PenBridge.exe when copying this application.

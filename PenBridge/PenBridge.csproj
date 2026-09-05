@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- POINTER_TYPE_INFO's FieldOffset(8) (see Input/NativeMethods.cs) is only correct with
+         8-byte pointer alignment. Restricting to x64 keeps that assumption true; Program.cs
+         also asserts Environment.Is64BitProcess at startup as a defense-in-depth check. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- Per-monitor DPI awareness so Screen.AllScreens bounds (used for pointer injection
+         coordinates) reflect true physical pixels on mixed-DPI multi-monitor setups. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>2.0.0</Version>
+    <Product>PenBridge</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="tools\ffmpeg.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="tools\LICENSE*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="tools\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- Lets the WinForms (non-Web SDK) project host Kestrel/ASP.NET Core WebApplication directly. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PenBridge.Tests" />
+  </ItemGroup>
+
+</Project>
