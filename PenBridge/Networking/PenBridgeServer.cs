@@ -199,7 +199,7 @@ public sealed class PenBridgeServer : IAsyncDisposable
             if (!Uri.TryCreate(assets, UriKind.Absolute, out var baseUri) ||
                 (baseUri.Scheme != Uri.UriSchemeHttps && !(baseUri.Scheme == Uri.UriSchemeHttp && baseUri.IsLoopback)))
                 return Results.BadRequest("올바른 공용 웹사이트 주소가 필요합니다.");
-            var loader = new Uri(baseUri, "dist/pad-loader.js").AbsoluteUri;
+            var loader = new Uri(baseUri, "pad-loader.js").AbsoluteUri;
             string loaderJson = JsonSerializer.Serialize(loader);
             string html = "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>PenBridge</title></head><body style=\"margin:0;background:#111;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh\">연결 준비 중…<script>fetch('/config').then(r=>r.json()).then(c=>{window.__PENBRIDGE_CONFIG__=c;const s=document.createElement('script');s.src=" + loaderJson + ";s.onerror=()=>document.body.textContent='공용 웹사이트 파일을 불러오지 못했습니다.';document.head.append(s)}).catch(()=>document.body.textContent='PC 설정을 불러오지 못했습니다.');</script></body></html>";
             return Results.Content(html, "text/html; charset=utf-8");
@@ -306,7 +306,7 @@ public sealed class PenBridgeServer : IAsyncDisposable
                     break; // client sent Close, or the message exceeded the size cap and the socket was already closed
 
                 string json = Encoding.UTF8.GetString(message);
-                if (!TryParseSample(json, out var raw, out string? parseError))
+                if (!TryParseSample(json, out var raw, out string? receivedMappingKey, out string? parseError))
                 {
                     LogMalformedThrottled(parseError ?? "unknown parse error");
                     continue;
@@ -318,19 +318,14 @@ public sealed class PenBridgeServer : IAsyncDisposable
                 }
 
                 var monitor = _getMonitor();
-                using (var document = JsonDocument.Parse(json))
+                if (receivedMappingKey != MappingKey(monitor, _getMappingMode()))
                 {
-                    if (!document.RootElement.TryGetProperty("mappingKey", out var key) ||
-                        key.ValueKind != JsonValueKind.String ||
-                        key.GetString() != MappingKey(monitor, _getMappingMode()))
-                    {
-                        // Release on the OLD monitor before accepting a different coordinate space.
-                        foreach (var release in session.BuildForcedReleases())
-                            _injector.Inject(release, lastMonitor);
-                        await socket.SendAsync(Encoding.UTF8.GetBytes(BuildConfigJson()),
-                            WebSocketMessageType.Text, true, token);
-                        continue;
-                    }
+                    // Release on the OLD monitor before accepting a different coordinate space.
+                    foreach (var release in session.BuildForcedReleases())
+                        _injector.Inject(release, lastMonitor);
+                    await socket.SendAsync(Encoding.UTF8.GetBytes(BuildConfigJson()),
+                        WebSocketMessageType.Text, true, token);
+                    continue;
                 }
                 if (monitor != lastMonitor)
                     foreach (var oldRelease in session.BuildForcedReleases())
@@ -406,13 +401,16 @@ public sealed class PenBridgeServer : IAsyncDisposable
         return stream.ToArray();
     }
 
-    internal static bool TryParseSample(string json, out PenSample sample, out string? error)
+    internal static bool TryParseSample(string json, out PenSample sample, out string? mappingKey, out string? error)
     {
         sample = default;
+        mappingKey = null;
         try
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            if (root.TryGetProperty("mappingKey", out var keyEl) && keyEl.ValueKind == JsonValueKind.String)
+                mappingKey = keyEl.GetString();
 
             if (!root.TryGetProperty("v", out var vEl) || vEl.GetInt32() != PenSample.ProtocolVersion)
             {

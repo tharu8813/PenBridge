@@ -1,21 +1,25 @@
 using PenBridge.Networking;
+using Forms = System.Windows.Forms;
 
 namespace PenBridge.UI;
 
-public partial class MainForm
+public partial class MainWindow
 {
-    private readonly NotifyIcon _tray = new();
-    private readonly ContextMenuStrip _trayMenu = new();
+    private readonly Forms.NotifyIcon _tray = new();
+    private readonly Forms.ContextMenuStrip _trayMenu = new();
     private bool _exitRequested;
     private ConnectionState _trayState = ConnectionState.Stopped;
     private string _lastError = "없음";
     private DateTime _lastErrorNotice = DateTime.MinValue;
-    private Form? _detailsWindow;
+    private ClientDetailsWindow? _detailsWindow;
 
+    /// <summary>Builds the tray icon and its context menu. Kept deliberately short: a status line,
+    /// the handful of real actions, and a separator before Exit — not a dump of live connection
+    /// stats (those live in the "연결 상세 정보" window, which refreshes every second on its own).</summary>
     private void InitializeTray()
     {
-        Icon = SystemIcons.Application;
-        _tray.Icon = Icon;
+        _tray.Icon = System.Drawing.Icon.ExtractAssociatedIcon(
+            Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName!);
         _tray.Text = "PenBridge · 중지됨";
         _tray.ContextMenuStrip = _trayMenu;
         _tray.Visible = true;
@@ -35,7 +39,7 @@ public partial class MainForm
         if (_closing) return;
         ShowInTaskbar = true;
         Show();
-        WindowState = FormWindowState.Normal;
+        WindowState = System.Windows.WindowState.Normal;
         Activate();
     }
 
@@ -45,7 +49,7 @@ public partial class MainForm
         _serverOperation = ToggleServerAsync();
         try { await _serverOperation; }
         catch (Exception ex) { _log.Error($"서버 처리 오류: {ex.Message}"); }
-        finally { if (!_closing) _startStopButton.Enabled = true; }
+        finally { if (!_closing) StartStopButton.IsEnabled = true; }
     }
 
     private void UpdateTrayState(ConnectionState state, string? detail)
@@ -54,9 +58,9 @@ public partial class MainForm
         _trayState = state;
         _tray.Text = $"PenBridge · {StateLabel(state)}";
         if (state == ConnectionState.Connected && previous != state)
-            _tray.ShowBalloonTip(4000, "iPad 연결됨", $"{detail}\n펜 입력을 사용할 수 있습니다.", ToolTipIcon.Info);
+            _tray.ShowBalloonTip(4000, "iPad 연결됨", $"{detail}\n펜 입력을 사용할 수 있습니다.", Forms.ToolTipIcon.Info);
         else if (previous == ConnectionState.Connected && state != ConnectionState.Connected)
-            _tray.ShowBalloonTip(4000, "iPad 연결 해제", "클라이언트 연결이 종료되었습니다.", ToolTipIcon.Info);
+            _tray.ShowBalloonTip(4000, "iPad 연결 해제", "클라이언트 연결이 종료되었습니다.", Forms.ToolTipIcon.Info);
         if (state == ConnectionState.Error) NotifyError(detail ?? "서버 오류가 발생했습니다.");
     }
 
@@ -65,7 +69,7 @@ public partial class MainForm
         _lastError = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\r\n{message}";
         if (DateTime.Now - _lastErrorNotice < TimeSpan.FromSeconds(10)) return;
         _lastErrorNotice = DateTime.Now;
-        _tray.ShowBalloonTip(5000, "PenBridge 오류", message[..Math.Min(message.Length, 240)], ToolTipIcon.Error);
+        _tray.ShowBalloonTip(5000, "PenBridge 오류", message[..Math.Min(message.Length, 240)], Forms.ToolTipIcon.Error);
     }
 
     private static string StateLabel(ConnectionState state) => state switch
@@ -80,23 +84,14 @@ public partial class MainForm
     private void BuildTrayMenu()
     {
         while (_trayMenu.Items.Count > 0) _trayMenu.Items[0].Dispose();
-        void Info(string text) => _trayMenu.Items.Add(new ToolStripMenuItem(text) { Enabled = false });
-        Info($"PenBridge · {StateLabel(_trayState)}");
-        if (_server is { } server) Info($"서버: {server.BoundAddress}:{server.BoundPort}");
-        if (_server?.Client is { } client)
-        {
-            Info($"클라이언트: {client.Address}");
-            Info($"연결: {client.ConnectedAt.LocalDateTime:HH:mm:ss} · {ConnectedDuration(client.ConnectedAt)}");
-            Info($"입력 {client.Samples:N0}개 · 영상 {(client.Streaming ? "전송 중" : "꺼짐")}");
-        }
-        else Info("연결된 클라이언트 없음");
-        _trayMenu.Items.Add(new ToolStripSeparator());
-        _trayMenu.Items.Add("연결 상세 정보…", null, (_, _) => ShowClientDetails());
-        _trayMenu.Items.Add("Windows 설정 / 연결 QR…", null, (_, _) => RestoreWindow());
+        _trayMenu.Items.Add(new Forms.ToolStripMenuItem($"PenBridge · {StateLabel(_trayState)}") { Enabled = false });
+        _trayMenu.Items.Add(new Forms.ToolStripSeparator());
+        _trayMenu.Items.Add("창 열기", null, (_, _) => RestoreWindow());
         var toggle = _trayMenu.Items.Add(_server is null ? "서버 시작" : "서버 중지", null,
             async (_, _) => await RunServerOperationAsync());
         toggle.Enabled = _serverOperation.IsCompleted && !_closing;
-        _trayMenu.Items.Add(new ToolStripSeparator());
+        _trayMenu.Items.Add("연결 상세 정보…", null, (_, _) => ShowClientDetails());
+        _trayMenu.Items.Add(new Forms.ToolStripSeparator());
         _trayMenu.Items.Add("PenBridge 종료", null, (_, _) =>
         {
             _exitRequested = true;
@@ -127,39 +122,16 @@ public partial class MainForm
     private void ShowClientDetails()
     {
         if (_closing) return;
-        if (_detailsWindow is { IsDisposed: false }) { _detailsWindow.Show(); _detailsWindow.Activate(); return; }
-        var window = new Form
-        {
-            Text = "PenBridge · 연결 상세 정보", Size = new Size(590, 480),
-            MinimumSize = new Size(420, 320), StartPosition = FormStartPosition.CenterScreen,
-            Icon = Icon,
-        };
-        var text = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
-            ScrollBars = ScrollBars.Vertical, Font = new Font("Segoe UI", 10), Text = BuildDetailsText() };
-        window.Controls.Add(text);
-        var timer = new System.Windows.Forms.Timer { Interval = 1000 };
-        timer.Tick += (_, _) => { var value = BuildDetailsText(); if (text.Text != value) text.Text = value; };
-        window.FormClosed += (_, _) => { timer.Dispose(); _detailsWindow = null; };
+        if (_detailsWindow is not null) { _detailsWindow.Show(); _detailsWindow.Activate(); return; }
+        var window = new ClientDetailsWindow(BuildDetailsText, Icon) { Owner = IsVisible ? this : null };
+        window.Closed += (_, _) => _detailsWindow = null;
         _detailsWindow = window;
-        timer.Start(); window.Show();
+        window.Show();
     }
 
     private static string ConnectedDuration(DateTimeOffset start)
     {
         var duration = DateTimeOffset.UtcNow - start;
         return $"{(int)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-            _detailsWindow?.Dispose();
-            _tray.Visible = false;
-            _tray.Dispose();
-            _trayMenu.Dispose();
-        }
-        base.Dispose(disposing);
     }
 }

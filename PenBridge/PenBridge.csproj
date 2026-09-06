@@ -3,6 +3,11 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms stays referenced only for the handful of APIs WPF has no equivalent for:
+         Screen (monitor enumeration for pen targeting) and NotifyIcon (tray icon). Its and WPF's
+         implicit usings both define types like Button/MessageBox/Application, so both sets are
+         removed below and the few call sites that need a WinForms type name it explicitly. -->
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -15,7 +20,9 @@
          coordinates) reflect true physical pixels on mixed-DPI multi-monitor setups. -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- WPF's text layout needs real culture data (XmlLanguage.GetSpecificCulture) — with
+         InvariantGlobalization on, every window crashes immediately on first render. -->
     <Version>2.0.0</Version>
     <Product>PenBridge</Product>
   </PropertyGroup>
@@ -34,6 +41,18 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="PenBridge.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Adding UseWPF drops the SDK's usual base implicit usings (System.IO, System.Net.Http) as a
+         side effect, so they're restored explicitly here. System.Drawing/System.Windows.Forms are
+         intentionally NOT restored globally: WPF defines several same-named types (Application,
+         Button, MessageBox, ...), so the few call sites still needing a WinForms type name it
+         explicitly instead of importing the whole namespace project-wide. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
 </Project>

@@ -4,8 +4,7 @@ namespace PenBridge.Models;
 
 public enum MappingMode { Stretch, PreserveAspectRatio }
 
-/// <summary>Persisted user choices — everything except the pairing token, which is
-/// Web assets and access credentials are intentionally not stored here.</summary>
+/// <summary>Persisted Windows-side choices. Web assets and access credentials are not stored here.</summary>
 public sealed class AppSettings
 {
     public string? NetworkAddress { get; set; }
@@ -13,6 +12,13 @@ public sealed class AppSettings
     public string? MonitorDeviceName { get; set; }
     public MappingMode MappingMode { get; set; } = MappingMode.PreserveAspectRatio;
     public bool AllowNonPenInput { get; set; }
+
+    // Window bounds are restored only when they're normal (not minimized/maximized) and on-screen —
+    // see MainWindow.RestoreWindowBounds — so a monitor unplugged between runs can't strand the window.
+    public int? WindowX { get; set; }
+    public int? WindowY { get; set; }
+    public int? WindowWidth { get; set; }
+    public int? WindowHeight { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PenBridge", "settings.json");

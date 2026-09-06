@@ -12,7 +12,7 @@ public interface ILog
 
 /// <summary>Minimal leveled logger: appends to %LOCALAPPDATA%\PenBridge\Logs\penbridge.log (one
 /// backup kept via simple size-based rotation) and raises Logged so the UI can mirror it live.
-/// Never logs the pairing token — callers must keep secrets out of the messages they pass in.</summary>
+/// Callers must keep sensitive values out of the messages they pass in.</summary>
 public sealed class FileLog : ILog
 {
     private const long MaxBytesBeforeRotation = 1_000_000;

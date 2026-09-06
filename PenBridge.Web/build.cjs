@@ -5,5 +5,6 @@ const html = fs.readFileSync(path.join(root, 'pad.html'), 'utf8');
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist', 'pad-loader.js'),
   `document.open();document.write(${JSON.stringify(html)});document.close();\n`);
-fs.copyFileSync(path.join(root, 'index.html'), path.join(root, 'dist', 'index.html'));
+const landing = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace("new URL('./dist/',location.href)", "new URL('./',location.href)");
+fs.writeFileSync(path.join(root, 'dist', 'index.html'), landing);
 console.log('Built PenBridge.Web/dist');

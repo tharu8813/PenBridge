@@ -21,8 +21,27 @@ public sealed class PointerInjector : IDisposable
     private readonly Dictionary<int, PenSample> _activeTouches = new();
     private readonly Queue<uint> _availableTouchIds = new(Enumerable.Range(1, (int)MaxTouchContacts).Select(i => (uint)i));
     private uint _frameId;
+    private MonitorRect? _cachedVirtualDesktop;
 
-    public PointerInjector(ILog log) => _log = log;
+    public PointerInjector(ILog log)
+    {
+        _log = log;
+        // ponytail: caches SystemInformation.VirtualScreen (a Win32 GetSystemMetrics call) instead
+        // of re-querying it on every single injected sample, which can be hundreds of times/sec.
+        // Unsubscribed in Dispose() — SystemEvents holds a static reference otherwise.
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => _cachedVirtualDesktop = null;
+
+    private MonitorRect VirtualDesktop()
+    {
+        if (_cachedVirtualDesktop is { } cached) return cached;
+        var bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
+        var fresh = new MonitorRect(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+        _cachedVirtualDesktop = fresh;
+        return fresh;
+    }
 
     public bool TryOpen(out string? error)
     {
@@ -58,8 +77,7 @@ public sealed class PointerInjector : IDisposable
             return false;
         }
 
-        var bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
-        var virtualDesktop = new MonitorRect(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+        var virtualDesktop = VirtualDesktop();
         if (sample.IsTouch)
             return InjectTouchFrame(sample, monitor, virtualDesktop);
 
@@ -120,6 +138,7 @@ public sealed class PointerInjector : IDisposable
 
     public void Dispose()
     {
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         foreach (var device in new[] { _penDevice, _touchDevice })
             if (device != IntPtr.Zero && !NativeMethods.DestroySyntheticPointerDevice(device))
                 _log.Warn($"DestroySyntheticPointerDevice failed: {Win32ErrorMessage()}");

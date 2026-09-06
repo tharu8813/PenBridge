@@ -16,17 +16,18 @@ internal static class VideoStreamer
             UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true,
         };
-        string[] args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "gdigrab",
+        string[] captureArgs = ["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "gdigrab",
             "-framerate", fps.ToString(), "-draw_mouse", "1", "-offset_x", monitor.Left.ToString(),
             "-offset_y", monitor.Top.ToString(), "-video_size", $"{monitor.Width}x{monitor.Height}",
             "-probesize", "32", "-analyzeduration", "0",
-            "-i", "desktop", "-an", "-vf", $"scale=w='trunc(min({width},iw)/2)*2':h=-2:flags=fast_bilinear",
-            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "baseline",
-            "-level:v", "4.2", "-pix_fmt", "yuv420p", "-crf", crf.ToString(), "-g", Math.Max(1, fps / 4).ToString(),
-            "-keyint_min", "1", "-sc_threshold", "0", "-bf", "0", "-threads", "4",
-            // Flush every frame instead of holding frames until the next keyframe (~250ms).
+            "-i", "desktop", "-an", "-vf", $"scale=w='trunc(min({width},iw)/2)*2':h=-2:flags=fast_bilinear"];
+        string[] outputArgs = ["-level:v", "4.2", "-pix_fmt", "yuv420p", "-threads", "4",
+            // Flush every frame instead of holding frames until the next keyframe (~250ms) — this is
+            // a live preview, not a recording, so latency matters far more than mux efficiency.
             "-movflags", "frag_every_frame+empty_moov+default_base_moof", "-flush_packets", "1", "-f", "mp4", "pipe:1"];
-        foreach (var arg in args) start.ArgumentList.Add(arg);
+        foreach (var arg in captureArgs) start.ArgumentList.Add(arg);
+        foreach (var arg in VideoEncoders.LowLatencyArgs(VideoEncoders.Selected, fps, crf)) start.ArgumentList.Add(arg);
+        foreach (var arg in outputArgs) start.ArgumentList.Add(arg);
         return start;
     }
 

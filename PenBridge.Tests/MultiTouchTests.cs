@@ -46,7 +46,7 @@ public class MultiTouchTests
     [Fact]
     public void Wire_parser_reads_touch_identity()
     {
-        Assert.True(PenBridgeServer.TryParseSample("""{"v":1,"phase":"down","inContact":true,"x":0.2,"y":0.3,"pressure":0.5,"pointerId":42,"pointerType":"touch"}""", out var sample, out _));
+        Assert.True(PenBridgeServer.TryParseSample("""{"v":1,"phase":"down","inContact":true,"x":0.2,"y":0.3,"pressure":0.5,"pointerId":42,"pointerType":"touch"}""", out var sample, out _, out _));
         Assert.True(sample.IsTouch);
         Assert.Equal(42, sample.PointerId);
     }

@@ -2,6 +2,8 @@
 bin/
 obj/
 publish/
+PenBridge/publish-*/
+installer-output/
 *.user
 *.suo
 .idea/

@@ -5,6 +5,8 @@ namespace PenBridge.Tests;
 
 public class VideoStreamerTests
 {
+    public VideoStreamerTests() => VideoEncoders.TestOverride = "libx264";
+
     [Fact]
     public void Encoder_uses_physical_monitor_offsets_and_bounded_settings()
     {
@@ -22,5 +24,19 @@ public class VideoStreamerTests
         Assert.DoesNotContain("frag_keyframe", After("-movflags"));
         Assert.True(info.CreateNoWindow);
         Assert.False(info.UseShellExecute);
+    }
+
+    [Theory]
+    [InlineData("h264_nvenc", "-cq")]
+    [InlineData("h264_qsv", "-preset")]
+    [InlineData("h264_amf", "-usage")]
+    [InlineData("libx264", "-crf")]
+    public void Each_encoder_selects_its_own_low_latency_args(string encoder, string expectedFlag)
+    {
+        VideoEncoders.TestOverride = encoder;
+        var args = VideoStreamer.BuildStartInfo(new MonitorRect(0, 0, 1920, 1080), 30, 1280, 23).ArgumentList.ToList();
+        Assert.Contains(encoder, args);
+        Assert.Contains(expectedFlag, args);
+        Assert.Contains("-bf", args); // every encoder disables B-frames for lower latency
     }
 }

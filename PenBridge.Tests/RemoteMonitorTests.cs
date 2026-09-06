@@ -28,6 +28,13 @@ public class RemoteMonitorTests
         await server.StartAsync(IPAddress.Loopback, port, CancellationToken.None);
         string origin = $"http://127.0.0.1:{server.BoundPort}";
         using var http = new HttpClient { BaseAddress = new Uri(origin) };
+        using var health = JsonDocument.Parse(await http.GetStringAsync("/health"));
+        Assert.Equal("PenBridge", health.RootElement.GetProperty("service").GetString());
+        using var unsafeAssets = await http.GetAsync("/connect?assets=http%3A%2F%2Fexample.com%2F");
+        Assert.Equal(HttpStatusCode.BadRequest, unsafeAssets.StatusCode);
+        string bootstrap = await http.GetStringAsync("/connect?assets=https%3A%2F%2Fpages.example%2Fpenbridge%2F");
+        Assert.Contains("https://pages.example/penbridge/pad-loader.js", bootstrap);
+        Assert.DoesNotContain("Apple Pencil로 이 화면에 필기하세요", bootstrap);
         async Task<HttpResponseMessage> Select(string id, string? requestOrigin)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"/monitor?id={id}");
