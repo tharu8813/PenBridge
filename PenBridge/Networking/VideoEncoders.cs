@@ -61,8 +61,12 @@ internal static class VideoEncoders
                 RedirectStandardOutput = true, RedirectStandardError = true,
             };
             string[] args = ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1",
-                "-c:v", encoder, "-frames:v", "1", "-f", "null", "-"];
+                "-pix_fmt", "yuv420p"];
             foreach (var arg in args) start.ArgumentList.Add(arg);
+            // Probe the exact low-latency option set used by a real stream. Some drivers expose an
+            // encoder but reject a requested profile, tune, or rate-control mode at startup.
+            foreach (var arg in LowLatencyArgs(encoder, 30, 23)) start.ArgumentList.Add(arg);
+            foreach (var arg in new[] { "-frames:v", "1", "-f", "null", "-" }) start.ArgumentList.Add(arg);
             using var process = Process.Start(start);
             if (process is null) return false;
             if (!process.WaitForExit(3000)) { process.Kill(true); return false; }

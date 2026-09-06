@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-0078D6?logo=windows&logoColor=white)](#요구-사항)
 [![Requires](https://img.shields.io/badge/iPad-Safari%20%2B%20Apple%20Pencil-000000?logo=apple&logoColor=white)](#요구-사항)
-[![Version](https://img.shields.io/badge/Version-2.0.0-4C1)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.1-4C1)](#)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 
 [Windows 설치 파일](https://github.com/tharu8813/PenBridge/releases/latest) · [iPad 웹 클라이언트](https://tharu8813.github.io/PenBridge/)

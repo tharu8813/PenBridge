@@ -1,0 +1,29 @@
+name: Build and test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build web client
+        run: node PenBridge.Web/build.cjs
+      - name: Verify generated web bundle
+        run: git diff --exit-code -- PenBridge.Web/dist
+      - name: Test client input logic
+        run: node --test PenBridge.Tests/client-input.test.cjs
+      - name: Test Windows application
+        run: dotnet test PenBridge.Tests -c Release -- RunConfiguration.DisableAppDomain=true

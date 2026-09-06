@@ -1,4 +1,5 @@
 using PenBridge.Input;
+using System.Runtime.InteropServices;
 
 namespace PenBridge.Tests;
 
@@ -10,6 +11,16 @@ namespace PenBridge.Tests;
 /// </summary>
 public class NativeFlagsTests
 {
+    [Fact]
+    public void Native_pointer_struct_layout_matches_winuser_x64_abi()
+    {
+        Assert.Equal(8, IntPtr.Size);
+        Assert.Equal(96, Marshal.SizeOf<POINTER_INFO>());
+        Assert.Equal(120, Marshal.SizeOf<POINTER_PEN_INFO>());
+        Assert.Equal(144, Marshal.SizeOf<POINTER_TOUCH_INFO>());
+        Assert.Equal(152, Marshal.SizeOf<POINTER_TYPE_INFO>());
+    }
+
     [Fact]
     public void Down_matches_documented_value()
         => Assert.Equal(0x00010000u, NativeMethods.POINTER_FLAG_DOWN);

@@ -22,6 +22,7 @@ public sealed class PointerInjector : IDisposable
     private readonly Queue<uint> _availableTouchIds = new(Enumerable.Range(1, (int)MaxTouchContacts).Select(i => (uint)i));
     private uint _frameId;
     private MonitorRect? _cachedVirtualDesktop;
+    private bool _subscribedToDisplayChanges;
 
     public PointerInjector(ILog log)
     {
@@ -29,7 +30,14 @@ public sealed class PointerInjector : IDisposable
         // ponytail: caches SystemInformation.VirtualScreen (a Win32 GetSystemMetrics call) instead
         // of re-querying it on every single injected sample, which can be hundreds of times/sec.
         // Unsubscribed in Dispose() — SystemEvents holds a static reference otherwise.
+        SubscribeToDisplayChanges();
+    }
+
+    private void SubscribeToDisplayChanges()
+    {
+        if (_subscribedToDisplayChanges) return;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        _subscribedToDisplayChanges = true;
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e) => _cachedVirtualDesktop = null;
@@ -46,6 +54,9 @@ public sealed class PointerInjector : IDisposable
     public bool TryOpen(out string? error)
     {
         if (_penDevice != IntPtr.Zero && _touchDevice != IntPtr.Zero) { error = null; return true; }
+        // The server can reopen this instance after a native injection failure. Dispose() removes
+        // the static SystemEvents handler, so restore it before the recovered device is used.
+        SubscribeToDisplayChanges();
         _frameId = 0;
         _penDevice = NativeMethods.CreateSyntheticPointerDevice(NativeMethods.PT_PEN, maxCount: 1, NativeMethods.POINTER_FEEDBACK_DEFAULT);
         if (_penDevice == IntPtr.Zero)
@@ -138,11 +149,16 @@ public sealed class PointerInjector : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        if (_subscribedToDisplayChanges)
+        {
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            _subscribedToDisplayChanges = false;
+        }
         foreach (var device in new[] { _penDevice, _touchDevice })
             if (device != IntPtr.Zero && !NativeMethods.DestroySyntheticPointerDevice(device))
                 _log.Warn($"DestroySyntheticPointerDevice failed: {Win32ErrorMessage()}");
         _penDevice = _touchDevice = IntPtr.Zero;
+        _cachedVirtualDesktop = null;
         ResetTouchIds();
     }
 

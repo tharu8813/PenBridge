@@ -25,6 +25,7 @@ public sealed class PenBridgeServer : IAsyncDisposable
 {
     private const int MaxMessageBytes = 16 * 1024;
     private const int PortProbeAttempts = 10;
+    internal const string ProductionAssetsBase = "https://tharu8813.github.io/PenBridge/";
 
     private readonly ILog _log;
     private readonly PointerInjector _injector;
@@ -133,6 +134,9 @@ public sealed class PenBridgeServer : IAsyncDisposable
         {
             ctx.Response.Headers.CacheControl = "no-store";
             ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers["X-Frame-Options"] = "DENY";
+            ctx.Response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+            ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
             await next();
         });
 
@@ -196,11 +200,13 @@ public sealed class PenBridgeServer : IAsyncDisposable
         app.MapGet("/connect", (HttpContext ctx) =>
         {
             string assets = ctx.Request.Query["assets"].ToString();
-            if (!Uri.TryCreate(assets, UriKind.Absolute, out var baseUri) ||
-                (baseUri.Scheme != Uri.UriSchemeHttps && !(baseUri.Scheme == Uri.UriSchemeHttp && baseUri.IsLoopback)))
+            if (!TryResolveAssetLoader(assets, IPAddress.IsLoopback(address), out var loader))
                 return Results.BadRequest("올바른 공용 웹사이트 주소가 필요합니다.");
-            var loader = new Uri(baseUri, "pad-loader.js").AbsoluteUri;
-            string loaderJson = JsonSerializer.Serialize(loader);
+            string loaderJson = JsonSerializer.Serialize(loader.AbsoluteUri);
+            ctx.Response.Headers["Content-Security-Policy"] =
+                $"default-src 'self'; script-src 'self' 'unsafe-inline' https://tharu8813.github.io; " +
+                $"style-src 'unsafe-inline'; connect-src 'self' ws://{address}:{port}; " +
+                "media-src 'self' blob:; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
             string html = "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><title>PenBridge</title></head><body style=\"margin:0;background:#111;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh\">연결 준비 중…<script>fetch('/config').then(r=>r.json()).then(c=>{window.__PENBRIDGE_CONFIG__=c;const s=document.createElement('script');s.src=" + loaderJson + ";s.onerror=()=>document.body.textContent='공용 웹사이트 파일을 불러오지 못했습니다.';document.head.append(s)}).catch(()=>document.body.textContent='PC 설정을 불러오지 못했습니다.');</script></body></html>";
             return Results.Content(html, "text/html; charset=utf-8");
         });
@@ -261,6 +267,29 @@ public sealed class PenBridgeServer : IAsyncDisposable
 
         await app.StartAsync(token);
         _app = app;
+    }
+
+    /// <summary>
+    /// The downloaded pad script executes in PenBridge's local HTTP origin and therefore inherits
+    /// permission to open /ws, change monitors, and read /stream.mp4. Never allow an arbitrary
+    /// HTTPS site to supply that script. Loopback assets remain available only when the server
+    /// itself is bound to loopback for local development and browser integration tests.
+    /// </summary>
+    internal static bool TryResolveAssetLoader(string assets, bool allowLoopbackAssets, out Uri loader)
+    {
+        loader = null!;
+        if (!Uri.TryCreate(assets, UriKind.Absolute, out var baseUri) ||
+            !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) ||
+            !string.IsNullOrEmpty(baseUri.Fragment))
+            return false;
+
+        bool production = string.Equals(baseUri.AbsoluteUri, ProductionAssetsBase, StringComparison.OrdinalIgnoreCase);
+        bool localDevelopment = allowLoopbackAssets && baseUri.Scheme == Uri.UriSchemeHttp && baseUri.IsLoopback;
+        if (!production && !localDevelopment)
+            return false;
+
+        loader = new Uri(baseUri, "pad-loader.js");
+        return true;
     }
 
     private static double AspectRatioOf(MonitorRect monitor) =>

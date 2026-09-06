@@ -32,8 +32,11 @@ public class RemoteMonitorTests
         Assert.Equal("PenBridge", health.RootElement.GetProperty("service").GetString());
         using var unsafeAssets = await http.GetAsync("/connect?assets=http%3A%2F%2Fexample.com%2F");
         Assert.Equal(HttpStatusCode.BadRequest, unsafeAssets.StatusCode);
-        string bootstrap = await http.GetStringAsync("/connect?assets=https%3A%2F%2Fpages.example%2Fpenbridge%2F");
-        Assert.Contains("https://pages.example/penbridge/pad-loader.js", bootstrap);
+        using var untrustedAssets = await http.GetAsync("/connect?assets=https%3A%2F%2Fevil.example%2F");
+        Assert.Equal(HttpStatusCode.BadRequest, untrustedAssets.StatusCode);
+        string officialAssets = Uri.EscapeDataString(PenBridgeServer.ProductionAssetsBase);
+        string bootstrap = await http.GetStringAsync($"/connect?assets={officialAssets}");
+        Assert.Contains("https://tharu8813.github.io/PenBridge/pad-loader.js", bootstrap);
         Assert.DoesNotContain("Apple Pencil로 이 화면에 필기하세요", bootstrap);
         async Task<HttpResponseMessage> Select(string id, string? requestOrigin)
         {
@@ -66,6 +69,18 @@ public class RemoteMonitorTests
         Assert.Null(client.LastInput);
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, timeout.Token);
         while (server.Client is not null) await Task.Delay(10, timeout.Token);
+    }
+
+    [Fact]
+    public void Asset_loader_allows_only_official_pages_or_explicit_loopback_development()
+    {
+        Assert.True(PenBridgeServer.TryResolveAssetLoader(PenBridgeServer.ProductionAssetsBase, false, out var official));
+        Assert.Equal("https://tharu8813.github.io/PenBridge/pad-loader.js", official.AbsoluteUri);
+        Assert.False(PenBridgeServer.TryResolveAssetLoader("https://evil.example/PenBridge/", false, out _));
+        Assert.False(PenBridgeServer.TryResolveAssetLoader("https://tharu8813.github.io/PenBridge/?redirect=evil", false, out _));
+        Assert.False(PenBridgeServer.TryResolveAssetLoader("http://127.0.0.1:9000/", false, out _));
+        Assert.True(PenBridgeServer.TryResolveAssetLoader("http://127.0.0.1:9000/dist/", true, out var local));
+        Assert.Equal("http://127.0.0.1:9000/dist/pad-loader.js", local.AbsoluteUri);
     }
 
     private sealed class TestLog : ILog

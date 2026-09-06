@@ -26,7 +26,7 @@ internal static class Program
                 () => MappingMode.PreserveAspectRatio, () => false);
             server.StartAsync(System.Net.IPAddress.Loopback, 18080, CancellationToken.None).GetAwaiter().GetResult();
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-url.txt"),
-                $"http://127.0.0.1:{server.BoundPort}/");
+                $"http://127.0.0.1:{server.BoundPort}/connect?assets={Uri.EscapeDataString(PenBridgeServer.ProductionAssetsBase)}");
             // Bounded local preview for video/UI checks; no native pointer device is opened.
             Thread.Sleep(TimeSpan.FromMinutes(5));
             server.DisposeAsync().AsTask().GetAwaiter().GetResult();

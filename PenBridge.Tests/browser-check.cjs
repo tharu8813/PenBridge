@@ -1,5 +1,6 @@
 const {chromium}=require('playwright');const fs=require('fs');
 (async()=>{ const browser=await chromium.launch({headless:true,channel:"msedge"}); const page=await browser.newPage({viewport:{width:1194,height:834},deviceScaleFactor:1}); const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const loader=fs.readFileSync('PenBridge.Web/dist/pad-loader.js','utf8');await page.route('https://tharu8813.github.io/PenBridge/pad-loader.js',r=>r.fulfill({contentType:'text/javascript',body:loader}));
 await page.goto(fs.readFileSync('PenBridge/bin/Release/net8.0-windows/preview-url.txt','utf8'));await page.waitForTimeout(7000);
 console.log('VIDEO',await page.locator('video').evaluate(v=>({time:v.currentTime,width:v.videoWidth,height:v.videoHeight,ready:v.readyState,error:v.error?.message})));if(await page.locator('video').evaluate(v=>v.currentTime===0 || v.videoWidth===0)) throw new Error('Video did not play'); console.log('STATUS',await page.locator('#videoStatus').textContent());
 await page.getByRole('button',{name:'설정',exact:true}).click();await page.screenshot({path:'PenBridge.Tests/settings-preview.png'});
