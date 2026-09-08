@@ -8,7 +8,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-0078D6?logo=windows&logoColor=white)](#요구-사항)
 [![Requires](https://img.shields.io/badge/iPad-Safari%20%2B%20Apple%20Pencil-000000?logo=apple&logoColor=white)](#요구-사항)
-[![Version](https://img.shields.io/badge/Version-2.0.1-4C1)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.2-4C1)](#)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 
 [Windows 설치 파일](https://github.com/tharu8813/PenBridge/releases/latest) · [iPad 웹 클라이언트](https://tharu8813.github.io/PenBridge/)
@@ -51,7 +51,7 @@ Windows의 펜 입력으로 전달됩니다. 그림판, 포토샵, 클립스튜�
 | 포트 충돌 | 다른 프로그램이 같은 포트를 쓰면 자동으로 다음 포트를 시도합니다 |
 | 방화벽 경고가 뜸 | Windows Defender 방화벽에서 "개인 네트워크" 통신을 허용하세요 |
 | Apple Pencil이 인식 안 됨 | 손가락/마우스 입력은 기본적으로 무시됩니다 |
-| 연결이 자주 끊김 | Wi-Fi 신호를 확인하세요. 화면 잠금/앱 전환 후에는 자동으로 재연결을 시도합니다 |
+| 연결이 자주 끊김 | 2.0.2에서 무한 재연결 문제를 수정했습니다. 최신 버전인지 확인하고, 그래도 끊기면 Wi-Fi 신호를 확인하세요. 화면 잠금/앱 전환 후에는 자동으로 재연결을 시도합니다 |
 | Windows 버전 오류 메시지 | Windows 10 버전 1809 이상이 필요합니다 (Windows 11 권장) |
 
 ## 안전하게 사용하기

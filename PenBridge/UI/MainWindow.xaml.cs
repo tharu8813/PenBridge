@@ -96,8 +96,12 @@ public partial class MainWindow : Window
 
     private void PostIfOpen(Action action)
     {
-        if (_closing || !IsLoaded) return;
-        try { Dispatcher.BeginInvoke(() => { if (!_closing) action(); }); }
+        // Callers include Kestrel-thread events (ILog.Logged, PenBridgeServer.ConnectionStateChanged).
+        // IsLoaded is a WPF instance member and calls VerifyAccess(), so it can only be read on the
+        // UI thread — check it inside the dispatched callback, not here. Dispatcher itself is safe
+        // to touch from any thread.
+        if (_closing) return;
+        try { Dispatcher.BeginInvoke(() => { if (!_closing && IsLoaded) action(); }); }
         catch (TaskCanceledException) { /* the window closed before the callback ran */ }
     }
 

@@ -1,13 +1,13 @@
-; PenBridge 2.0.1 Windows installer
+; PenBridge 2.0.2 Windows installer
 ; Compile with Inno Setup 6: ISCC.exe setup.iss
 
 #define MyAppName "PenBridge"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "2.0.2"
 #define MyAppPublisher "Ji Beak min (tharu8813)"
 #define MyAppURL "https://github.com/tharu8813/PenBridge"
 #define MyAppExeName "PenBridge.exe"
 #define MyAppGUID "{{70ca199a-16ce-4466-927e-9b6b75b215d1}"
-#define SourcePath "PenBridge\publish-2.0.1"
+#define SourcePath "PenBridge\publish-2.0.2"
 
 [Setup]
 AppId={#MyAppGUID}
